@@ -21,3 +21,13 @@ spec = do
 
     it "should work in cases without @" $ do
       (importedName "Data.List.map") `shouldBe` "Data.List.map"
+
+  describe "importEntry" $ do
+    it "should work with qualified import" $ do
+      (importEntry "Data.@List.map")
+        `shouldBe` ("Data.List", "map", Just "List")
+      (importEntry "Data.List.map")
+        `shouldBe` ("Data.List", "map", Just "Data.List")
+
+    it "should work with unqualified import" $ do
+      (importEntry "Data.List.@map") `shouldBe` ("Data.List", "map", Nothing)
