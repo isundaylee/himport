@@ -16,10 +16,26 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md
 cabal-version:       >=1.10
 
+library
+  hs-source-dirs:      src
+  exposed-modules:
+    HaskellAutoImporter.Util
+  build-depends:       base >=4.11 && <4.12
+  default-language:    Haskell2010
+
 executable haskell-auto-importer
   main-is:             Main.hs
-  -- other-modules:
-  -- other-extensions:
   build-depends:       base >=4.11 && <4.12
   hs-source-dirs:      src
   default-language:    Haskell2010
+  
+test-suite spec
+  ghc-options:        -Wall
+  hs-source-dirs:     test
+  main-is:            Spec.hs
+  default-extensions: OverloadedStrings
+  type:               exitcode-stdio-1.0
+  build-depends:      base,
+                      haskell-auto-importer,
+                      hspec
+  default-language:   Haskell2010
