@@ -11,8 +11,13 @@ spec = do
   describe "isIdentQualified" $ do
     it "return true with qualified ident" $ do
       (isIdentQualified "Data.List.map") `shouldBe` True
+
     it "return false with unqualified ident" $ do
       (isIdentQualified "map") `shouldBe` False
+
+    it "return false with only dots" $ do
+      (isIdentQualified ".") `shouldBe` False
+      (isIdentQualified "..") `shouldBe` False
 
   describe "importedName" $ do
     it "should work in cases with @" $ do

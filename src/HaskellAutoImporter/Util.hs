@@ -5,6 +5,8 @@ module HaskellAutoImporter.Util
   )
 where
 
+import           Control.Applicative            ( liftA2 )
+
 import           Data.List                      ( findIndex
                                                 , intercalate
                                                 )
@@ -16,7 +18,8 @@ import           Data.Text                      ( splitOn
                                                 )
 
 isIdentQualified :: String -> Bool
-isIdentQualified = not . null . filter (== '.')
+isIdentQualified =
+  liftA2 (&&) (not . null . filter (== '.')) (not . null . filter (/= '.'))
 
 importedName :: String -> String
 importedName ident = case (findIndex (== '@') ident) of
