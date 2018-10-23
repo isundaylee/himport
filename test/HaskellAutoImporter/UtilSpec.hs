@@ -20,19 +20,20 @@ spec = do
       (isIdentQualified "..") `shouldBe` False
 
   describe "importedName" $ do
-    it "should work in cases with @" $ do
-      (importedName "Data.List.@map") `shouldBe` "map"
-      (importedName "Data.@List.map") `shouldBe` "List.map"
+    it "should work in cases with '" $ do
+      (importedName "Data.List.map'") `shouldBe` "map"
+      (importedName "Data.List'.map") `shouldBe` "List.map"
+      (importedName "Data'.List'.map") `shouldBe` "Data.List.map"
 
-    it "should work in cases without @" $ do
+    it "should work in cases without '" $ do
       (importedName "Data.List.map") `shouldBe` "Data.List.map"
 
   describe "importEntry" $ do
     it "should work with qualified import" $ do
-      (importEntry "Data.@List.map")
+      (importEntry "Data.List'.map")
         `shouldBe` ("Data.List", "map", Just "List")
       (importEntry "Data.List.map")
         `shouldBe` ("Data.List", "map", Just "Data.List")
 
     it "should work with unqualified import" $ do
-      (importEntry "Data.List.@map") `shouldBe` ("Data.List", "map", Nothing)
+      (importEntry "Data.List.map'") `shouldBe` ("Data.List", "map", Nothing)

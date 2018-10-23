@@ -1,4 +1,7 @@
 import           System.Environment             ( getArgs )
 
+import           HaskellAutoImporter.AutoImporter
+                                                ( autoImport )
+
 main :: IO ()
-main = putStrLn ("Hello")
+main = interact $ autoImport
