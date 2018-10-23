@@ -1,4 +1,4 @@
-# Revision history for haskell-auto-importer
+# Revision history for himport
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

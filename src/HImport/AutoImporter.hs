@@ -1,9 +1,9 @@
-module HaskellAutoImporter.AutoImporter
+module HImport.AutoImporter
   ( autoImport
   )
 where
 
-import           HaskellAutoImporter.Util       ( isIdentQualified
+import           HImport.Util       ( isIdentQualified
                                                 , importedName
                                                 , importEntry
                                                 , splitTokens

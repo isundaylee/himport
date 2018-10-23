@@ -1,4 +1,4 @@
-module HaskellAutoImporter.Util
+module HImport.Util
   ( isIdentQualified
   , importedName
   , importEntry

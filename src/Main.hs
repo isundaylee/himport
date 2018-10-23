@@ -1,6 +1,6 @@
 import           System.Environment             ( getArgs )
 
-import           HaskellAutoImporter.AutoImporter
+import           HImport.AutoImporter
                                                 ( autoImport )
 
 main :: IO ()

@@ -1,10 +1,10 @@
-module HaskellAutoImporter.AutoImporterSpec
+module HImport.AutoImporterSpec
   ( spec
   )
 where
 
 import           Test.Hspec
-import           HaskellAutoImporter.AutoImporter
+import           HImport.AutoImporter
 
 import           Data.List                      ( intercalate )
 

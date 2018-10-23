@@ -1,10 +1,10 @@
-module HaskellAutoImporter.UtilSpec
+module HImport.UtilSpec
   ( spec
   )
 where
 
 import           Test.Hspec
-import           HaskellAutoImporter.Util
+import           HImport.Util
 
 spec :: Spec
 spec = do
