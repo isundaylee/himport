@@ -12,6 +12,11 @@ import           HImport.Util                   ( isIdentQualified
 
 import qualified HImport.ASTUtil               as ASTUtil
                                                 ( buildQName
+                                                , buildModuleName
+                                                , buildIVar
+                                                , buildImportSpecList
+                                                , buildUnqualifiedImportDecl
+                                                , buildQualifiedImportDecl
                                                 , getStringSpecName
                                                 , getStringQName
                                                 , getStringModuleName
@@ -44,12 +49,14 @@ import           Control.Monad.State            ( State
 
 import           Data.Char                      ( toUpper )
 
+type ImportDecl = Syntax.ImportDecl SrcLoc.SrcSpanInfo
+type ModuleName = Syntax.ModuleName SrcLoc.SrcSpanInfo
+type QName = Syntax.QName SrcLoc.SrcSpanInfo
+
 collectAndRewriteIdents :: Data a => a -> (a, [String])
 collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
  where
-  visit
-    :: Syntax.QName SrcLoc.SrcSpanInfo
-    -> State [String] (Syntax.QName SrcLoc.SrcSpanInfo)
+  visit :: QName -> State [String] (QName)
   visit node = do
     state <- get
     let fullName = ASTUtil.getStringQName node
@@ -62,50 +69,21 @@ collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
 -- Add-to-import logic
 --------------------------------------------------------------------------------
 
-addNewImport
-  :: ImportEntry
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-addNewImport (moduleName, objectName, maybeAsName) imports =
-  (newImport : imports)
+addNewImport :: ImportEntry -> [ImportDecl] -> [ImportDecl]
+addNewImport (moduleName, objectName, maybeAs) imports = (newImport : imports)
  where
-  newSrcSpan     = (SrcLoc.SrcSpan "" 0 0 0 0)
-  newSrcSpanInfo = (SrcLoc.SrcSpanInfo newSrcSpan [])
-  isQualified    = isJust maybeAsName
-  importAs       = case maybeAsName of
-    Nothing     -> Nothing
-    Just asName -> Just $ (Syntax.ModuleName newSrcSpanInfo asName)
-  importSpecs =
-    (Syntax.ImportSpecList
-      newSrcSpanInfo
-      False
-      [Syntax.IVar newSrcSpanInfo (Syntax.Ident newSrcSpanInfo objectName)]
-    )
-  newImport =
-    (Syntax.ImportDecl newSrcSpanInfo
-                       (Syntax.ModuleName newSrcSpanInfo moduleName)
-                       isQualified
-                       False
-                       False
-                       Nothing
-                       importAs
-                       (Just importSpecs)
-    )
+  importSpecList = (ASTUtil.buildImportSpecList [ASTUtil.buildIVar objectName])
+  newImport      = case maybeAs of
+    Nothing -> ASTUtil.buildUnqualifiedImportDecl moduleName importSpecList
+    Just as -> ASTUtil.buildQualifiedImportDecl moduleName as importSpecList
 
-qualMatch
-  :: (Maybe String)
-  -> Bool
-  -> (Maybe (Syntax.ModuleName SrcLoc.SrcSpanInfo))
-  -> Bool
+qualMatch :: (Maybe String) -> Bool -> (Maybe (ModuleName)) -> Bool
 qualMatch Nothing False Nothing = True
 qualMatch (Just entryAsName) True (Just (Syntax.ModuleName _ importAsName)) =
   (entryAsName == importAsName)
 qualMatch _ _ _ = False
 
-addToExistingImport
-  :: ImportEntry
-  -> (Syntax.ImportDecl SrcLoc.SrcSpanInfo)
-  -> (Maybe (Syntax.ImportDecl SrcLoc.SrcSpanInfo))
+addToExistingImport :: ImportEntry -> (ImportDecl) -> (Maybe (ImportDecl))
 addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.ImportDecl _ (Syntax.ModuleName _ impModule) impIsQual _ _ _ impAs impMaybeSpecs)
   | (isNothing impMaybeSpecs)
   = Nothing
@@ -122,10 +100,7 @@ addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.Imp
       }
     )
 
-addToExistingImports
-  :: ImportEntry
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-  -> (Maybe [Syntax.ImportDecl SrcLoc.SrcSpanInfo])
+addToExistingImports :: ImportEntry -> [ImportDecl] -> (Maybe [ImportDecl])
 addToExistingImports ident [] = Nothing
 addToExistingImports ident (firstImport : rest) =
   case (addToExistingImport ident firstImport) of
@@ -134,15 +109,14 @@ addToExistingImports ident (firstImport : rest) =
       Nothing          -> Nothing
       Just restImports -> Just (firstImport : restImports)
 
-matchInExistingImports
-  :: ImportEntry -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo] -> Bool
+matchInExistingImports :: ImportEntry -> [ImportDecl] -> Bool
 matchInExistingImports ident [] = False
 matchInExistingImports ident (firstImport : restImports) =
   if match ident firstImport
     then True
     else matchInExistingImports ident restImports
  where
-  match :: ImportEntry -> Syntax.ImportDecl SrcLoc.SrcSpanInfo -> Bool
+  match :: ImportEntry -> ImportDecl -> Bool
   match (entryModule, entryObject, entryMaybeAs) (Syntax.ImportDecl _ _ importIsQual _ _ _ importMaybeAs importMaybeSpecList)
     | isNothing importMaybeSpecList
     = False
@@ -160,10 +134,7 @@ matchInExistingImports ident (firstImport : restImports) =
    where
     (Syntax.ImportSpecList _ _ importSpecs) = fromJust importMaybeSpecList
 
-addImport
-  :: String
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
+addImport :: String -> [ImportDecl] -> [ImportDecl]
 addImport ident imports =
   let entry   = importEntry ident
       matched = matchInExistingImports entry imports
@@ -173,10 +144,7 @@ addImport ident imports =
           Nothing         -> addNewImport entry imports
           Just newImports -> newImports
 
-addImports
-  :: [String]
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
+addImports :: [String] -> [ImportDecl] -> [ImportDecl]
 addImports []             imports = imports
 addImports (ident : rest) imports = if isIdentQualified ident
   then addImport ident $ addImports rest imports

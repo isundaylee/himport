@@ -1,13 +1,16 @@
 module HImport.ASTUtil
   ( buildName
+  , buildQName
   , buildModuleName
   , buildIVar
+  , buildImportSpecList
+  , buildUnqualifiedImportDecl
+  , buildQualifiedImportDecl
   , specListWithNewSpec
   , getStringName
   , getStringModuleName
   , getStringQName
   , getStringSpecName
-  , buildQName
   )
 where
 
@@ -25,6 +28,7 @@ import qualified Language.Haskell.Exts.Syntax  as Syntax
                                                 ( Name(Ident, Symbol)
                                                 , QName(Qual, UnQual)
                                                 , ModuleName(ModuleName)
+                                                , ImportDecl(ImportDecl)
                                                 , ImportSpec(IVar)
                                                 , ImportSpecList(ImportSpecList)
                                                 )
@@ -33,19 +37,26 @@ import           Data.Maybe                     ( catMaybes )
 
 import           Data.List                      ( intercalate )
 
+type ImportDecl = Syntax.ImportDecl SrcLoc.SrcSpanInfo
+type ImportSpec = Syntax.ImportSpec SrcLoc.SrcSpanInfo
+type ImportSpecList = Syntax.ImportSpecList SrcLoc.SrcSpanInfo
+type ModuleName = Syntax.ModuleName SrcLoc.SrcSpanInfo
+type Name = Syntax.Name SrcLoc.SrcSpanInfo
+type QName = Syntax.QName SrcLoc.SrcSpanInfo
+
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
 dummySrcSpanInfo = (SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) [])
 
-buildName :: String -> Syntax.Name SrcLoc.SrcSpanInfo
+buildName :: String -> Name
 buildName = Syntax.Ident dummySrcSpanInfo
 
-buildModuleName :: String -> Syntax.ModuleName SrcLoc.SrcSpanInfo
+buildModuleName :: String -> ModuleName
 buildModuleName = Syntax.ModuleName dummySrcSpanInfo
 
-buildIVar :: String -> Syntax.ImportSpec SrcLoc.SrcSpanInfo
+buildIVar :: String -> ImportSpec
 buildIVar = Syntax.IVar dummySrcSpanInfo . buildName
 
-buildQName :: String -> Syntax.QName SrcLoc.SrcSpanInfo
+buildQName :: String -> QName
 buildQName name
   | not $ Util.isIdentQualified name
   = (Syntax.UnQual dummySrcSpanInfo $ buildName name)
@@ -58,6 +69,32 @@ buildQName name
                      (buildName base)
         )
 
+buildUnqualifiedImportDecl :: String -> ImportSpecList -> ImportDecl
+buildUnqualifiedImportDecl moduleName specList = Syntax.ImportDecl
+  dummySrcSpanInfo
+  (buildModuleName moduleName)
+  False
+  False
+  False
+  Nothing
+  Nothing
+  (Just specList)
+
+buildQualifiedImportDecl :: String -> String -> ImportSpecList -> ImportDecl
+buildQualifiedImportDecl moduleName asName specList = Syntax.ImportDecl
+  dummySrcSpanInfo
+  (buildModuleName moduleName)
+  True
+  False
+  False
+  Nothing
+  (Just $ buildModuleName asName)
+  (Just specList)
+
+buildImportSpecList :: [ImportSpec] -> ImportSpecList
+buildImportSpecList objects =
+  Syntax.ImportSpecList dummySrcSpanInfo False objects
+
 getStringName :: Syntax.Name l -> String
 getStringName (Syntax.Ident  _ name) = name
 getStringName (Syntax.Symbol _ name) = name
@@ -65,20 +102,17 @@ getStringName (Syntax.Symbol _ name) = name
 getStringModuleName :: Syntax.ModuleName l -> String
 getStringModuleName (Syntax.ModuleName _ name) = name
 
-getStringQName :: Syntax.QName SrcLoc.SrcSpanInfo -> String
+getStringQName :: QName -> String
 getStringQName (Syntax.Qual _ (Syntax.ModuleName _ moduleName) name) =
   moduleName ++ "." ++ (getStringName name)
 getStringQName (Syntax.UnQual _ name) = getStringName name
 getStringQName node                   = "UNKNOWN"
 
-getStringSpecName :: (Syntax.ImportSpec SrcLoc.SrcSpanInfo) -> Maybe String
+getStringSpecName :: ImportSpec -> Maybe String
 getStringSpecName (Syntax.IVar _ name) = Just $ getStringName name
 getStringSpecName _                    = Nothing
 
-specListWithNewSpec
-  :: String
-  -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
-  -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
+specListWithNewSpec :: String -> ImportSpecList -> ImportSpecList
 specListWithNewSpec object specList
   | Syntax.ImportSpecList annotation hiding specs <- specList
   = if object `elem` (catMaybes $ map getStringSpecName specs)
