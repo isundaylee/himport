@@ -3,6 +3,7 @@ module HImport.Util
   , importedName
   , importEntry
   , splitTokens
+  , ImportEntry
   )
 where
 
@@ -17,6 +18,8 @@ import           Data.Text                      ( splitOn
                                                 , pack
                                                 , unpack
                                                 )
+
+type ImportEntry = (String, String, Maybe String)
 
 isIdentQualified :: String -> Bool
 isIdentQualified =
@@ -50,7 +53,7 @@ moduleName ident = if (null moduleTokens)
 objectName :: String -> String
 objectName = removeMarker . last . splitTokens
 
-importEntry :: String -> (String, String, Maybe String)
+importEntry :: String -> ImportEntry
 importEntry ident =
   let modu   = fromJust $ moduleName ident
       object = objectName ident

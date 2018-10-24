@@ -3,10 +3,11 @@ module HImport.AutoImporter
   )
 where
 
-import           HImport.Util       ( isIdentQualified
+import           HImport.Util                   ( isIdentQualified
                                                 , importedName
                                                 , importEntry
                                                 , splitTokens
+                                                , ImportEntry
                                                 )
 
 import           Debug.Trace                    ( trace )
@@ -99,7 +100,8 @@ specListWithNewSpec
   :: String
   -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
   -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
-specListWithNewSpec object specList@(Syntax.ImportSpecList annotation hiding specs)
+specListWithNewSpec object specList
+  | Syntax.ImportSpecList annotation hiding specs <- specList
   = if object `elem` (catMaybes $ map getSpecName specs)
     then specList
     else Syntax.ImportSpecList annotation hiding (specs ++ [buildIVar object])
@@ -109,7 +111,7 @@ specListWithNewSpec object specList@(Syntax.ImportSpecList annotation hiding spe
 --------------------------------------------------------------------------------
 
 addNewImport
-  :: (String, String, Maybe String)
+  :: ImportEntry
   -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
   -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
 addNewImport (moduleName, objectName, maybeAsName) imports =
@@ -149,7 +151,7 @@ qualMatch (Just entryAsName) True (Just (Syntax.ModuleName _ importAsName)) =
 qualMatch _ _ _ = False
 
 addToExistingImport
-  :: (String, String, Maybe String)
+  :: ImportEntry
   -> (Syntax.ImportDecl SrcLoc.SrcSpanInfo)
   -> (Maybe (Syntax.ImportDecl SrcLoc.SrcSpanInfo))
 addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.ImportDecl _ (Syntax.ModuleName _ impModule) impIsQual _ _ _ impAs impMaybeSpecs)
@@ -169,7 +171,7 @@ addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.Imp
     )
 
 addToExistingImports
-  :: (String, String, Maybe String)
+  :: ImportEntry
   -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
   -> (Maybe [Syntax.ImportDecl SrcLoc.SrcSpanInfo])
 addToExistingImports ident [] = Nothing
@@ -181,19 +183,14 @@ addToExistingImports ident (firstImport : rest) =
       Just restImports -> Just (firstImport : restImports)
 
 matchInExistingImports
-  :: (String, String, Maybe String)
-  -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo]
-  -> Bool
+  :: ImportEntry -> [Syntax.ImportDecl SrcLoc.SrcSpanInfo] -> Bool
 matchInExistingImports ident [] = False
 matchInExistingImports ident (firstImport : restImports) =
   if match ident firstImport
     then True
     else matchInExistingImports ident restImports
  where
-  match
-    :: (String, String, Maybe String)
-    -> Syntax.ImportDecl SrcLoc.SrcSpanInfo
-    -> Bool
+  match :: ImportEntry -> Syntax.ImportDecl SrcLoc.SrcSpanInfo -> Bool
   match (entryModule, entryObject, entryMaybeAs) (Syntax.ImportDecl _ _ importIsQual _ _ _ importMaybeAs importMaybeSpecList)
     | isNothing importMaybeSpecList
     = False
