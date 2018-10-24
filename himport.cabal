@@ -20,6 +20,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     HImport.Util
                        HImport.AutoImporter
+                       HImport.ASTUtil
   default-extensions:  OverloadedStrings
   build-depends:       base >=4.11 && <4.12,
                        containers,
@@ -50,4 +51,6 @@ test-suite spec
   build-depends:      base,
                       himport,
                       hspec
+  other-modules:      HImport.AutoImporterSpec
+                      HImport.UtilSpec
   default-language:   Haskell2010

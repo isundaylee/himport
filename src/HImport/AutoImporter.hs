@@ -10,6 +10,14 @@ import           HImport.Util                   ( isIdentQualified
                                                 , ImportEntry
                                                 )
 
+import qualified HImport.ASTUtil               as ASTUtil
+                                                ( buildQName
+                                                , getStringSpecName
+                                                , getStringQName
+                                                , getStringModuleName
+                                                , specListWithNewSpec
+                                                )
+
 import           Debug.Trace                    ( trace )
 
 import qualified Language.Haskell.Exts.Parser  as Parser
@@ -36,32 +44,6 @@ import           Control.Monad.State            ( State
 
 import           Data.Char                      ( toUpper )
 
-getStringName :: Syntax.Name l -> String
-getStringName (Syntax.Ident  _ name) = name
-getStringName (Syntax.Symbol _ name) = name
-
-getStringModuleName :: Syntax.ModuleName l -> String
-getStringModuleName (Syntax.ModuleName _ name) = name
-
-getFullName :: Syntax.QName SrcLoc.SrcSpanInfo -> String
-getFullName (Syntax.Qual _ (Syntax.ModuleName _ moduleName) name) =
-  moduleName ++ "." ++ (getStringName name)
-getFullName (Syntax.UnQual _ name) = getStringName name
-getFullName node                   = "UNKNOWN"
-
-buildQName :: String -> Syntax.QName SrcLoc.SrcSpanInfo
-buildQName name
-  | not $ isIdentQualified name
-  = (Syntax.UnQual dummySrcSpanInfo $ buildName name)
-  | otherwise
-  = let tokens     = splitTokens name
-        base       = last tokens
-        moduleName = intercalate "." $ init tokens
-    in  (Syntax.Qual dummySrcSpanInfo
-                     (buildModuleName moduleName)
-                     (buildName base)
-        )
-
 collectAndRewriteIdents :: Data a => a -> (a, [String])
 collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
  where
@@ -70,41 +52,11 @@ collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
     -> State [String] (Syntax.QName SrcLoc.SrcSpanInfo)
   visit node = do
     state <- get
-    let fullName = getFullName node
+    let fullName = ASTUtil.getStringQName node
     put (fullName : state)
     return $ if isIdentQualified fullName
-      then buildQName $ importedName $ fullName
+      then ASTUtil.buildQName $ importedName $ fullName
       else node
-
---------------------------------------------------------------------------------
--- Builder helpers
---------------------------------------------------------------------------------
-
-dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
-dummySrcSpanInfo = (SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) [])
-
-buildName :: String -> Syntax.Name SrcLoc.SrcSpanInfo
-buildName = Syntax.Ident dummySrcSpanInfo
-
-buildModuleName :: String -> Syntax.ModuleName SrcLoc.SrcSpanInfo
-buildModuleName = Syntax.ModuleName dummySrcSpanInfo
-
-buildIVar :: String -> Syntax.ImportSpec SrcLoc.SrcSpanInfo
-buildIVar = Syntax.IVar dummySrcSpanInfo . buildName
-
-getSpecName :: (Syntax.ImportSpec SrcLoc.SrcSpanInfo) -> Maybe String
-getSpecName (Syntax.IVar _ name) = Just $ getStringName name
-getSpecName _                    = Nothing
-
-specListWithNewSpec
-  :: String
-  -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
-  -> Syntax.ImportSpecList SrcLoc.SrcSpanInfo
-specListWithNewSpec object specList
-  | Syntax.ImportSpecList annotation hiding specs <- specList
-  = if object `elem` (catMaybes $ map getSpecName specs)
-    then specList
-    else Syntax.ImportSpecList annotation hiding (specs ++ [buildIVar object])
 
 --------------------------------------------------------------------------------
 -- Add-to-import logic
@@ -164,7 +116,7 @@ addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.Imp
   | otherwise
   = Just
     (imp
-      { Syntax.importSpecs = Just $ specListWithNewSpec
+      { Syntax.importSpecs = Just $ ASTUtil.specListWithNewSpec
                                entryObject
                                (fromJust impMaybeSpecs)
       }
@@ -200,11 +152,11 @@ matchInExistingImports ident (firstImport : restImports) =
     = False
     | (isJust entryMaybeAs)
       && (  (fromJust entryMaybeAs)
-         /= (getStringModuleName $ fromJust importMaybeAs)
+         /= (ASTUtil.getStringModuleName $ fromJust importMaybeAs)
          )
     = False
     | otherwise
-    = entryObject `elem` (catMaybes $ map getSpecName importSpecs)
+    = entryObject `elem` (catMaybes $ map ASTUtil.getStringSpecName importSpecs)
    where
     (Syntax.ImportSpecList _ _ importSpecs) = fromJust importMaybeSpecList
 
