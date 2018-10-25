@@ -272,3 +272,7 @@ spec = do
                      , "main = List2.somethingElse"
                      ]
                    )
+
+    it "should not not import constructors in patterns" $ do
+      (autoImport (joinLines ["main Util.Empty = 0"]))
+        `shouldBe` (joinLines ["main Util.Empty = 0"])

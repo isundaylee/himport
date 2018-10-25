@@ -70,6 +70,7 @@ type ModuleName = Syntax.ModuleName SrcLoc.SrcSpanInfo
 type QName = Syntax.QName SrcLoc.SrcSpanInfo
 type Type = Syntax.Type SrcLoc.SrcSpanInfo
 type Exp = Syntax.Exp SrcLoc.SrcSpanInfo
+type Pat = Syntax.Pat SrcLoc.SrcSpanInfo
 
 --------------------------------------------------------------------------------
 -- Add-to-import logic
@@ -168,16 +169,20 @@ collectIdents tree = IdentList (filter isIdentQualified allVarIdents)
   (IdentList allVarIdents allTypeIdents) = everythingWithContext
     []
     mergeIdentList
-    (extQ (extQ (mkQ defaultOp markType) markCon) collect)
+    (extQ (extQ (extQ (mkQ defaultOp markType) markExp) markPat) collect)
     tree
 
   markType :: Type -> [CollectFlag] -> (IdentList, [CollectFlag])
   markType (Syntax.TyCon _ _) flags = (emptyIdentList, Type : flags)
   markType _                  flags = (emptyIdentList, Var : flags)
 
-  markCon :: Exp -> [CollectFlag] -> (IdentList, [CollectFlag])
-  markCon (Syntax.Con _ _) flags = (emptyIdentList, Skip : flags)
-  markCon _                flags = (emptyIdentList, Var : flags)
+  markExp :: Exp -> [CollectFlag] -> (IdentList, [CollectFlag])
+  markExp (Syntax.Con _ _) flags = (emptyIdentList, Skip : flags)
+  markExp _                flags = (emptyIdentList, Var : flags)
+
+  markPat :: Pat -> [CollectFlag] -> (IdentList, [CollectFlag])
+  markPat Syntax.PApp{} flags = (emptyIdentList, Skip : flags)
+  markPat _             flags = (emptyIdentList, Var : flags)
 
   collect :: QName -> [CollectFlag] -> (IdentList, [CollectFlag])
   collect qName flags@(Type : _) =
