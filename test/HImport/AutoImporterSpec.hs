@@ -231,3 +231,28 @@ spec = do
                      , "main = Empty"
                      ]
                    )
+
+    it "should not collapse different unqualified imports" $ do
+      (autoImport
+          (joinLines
+            ["import Data.List (something)", "main = Data.Maybe.somethingElse'"]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import Data.Maybe (somethingElse)"
+                     , "import Data.List (something)"
+                     , "main = somethingElse"
+                     ]
+                   )
+
+    it "should collapse matching unqualified imports" $ do
+      (autoImport
+          (joinLines
+            ["import Data.List (something)", "main = Data.List.somethingElse'"]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import Data.List (something, somethingElse)"
+                     , "main = somethingElse"
+                     ]
+                   )

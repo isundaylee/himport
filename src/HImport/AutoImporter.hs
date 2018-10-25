@@ -91,8 +91,12 @@ importTargetMatch (_, _, Just as) (Syntax.ImportDecl _ _ True _ _ _ (Just import
 importTargetMatch _ _ = False
 
 isCollapsibleInto :: ImportEntry -> ImportDecl -> Bool
-isCollapsibleInto entry imp | isNothing $ Syntax.importSpecs imp = False
-                            | otherwise = importTargetMatch entry imp
+isCollapsibleInto entry@(entryModule, _, _) imp
+  | isNothing $ Syntax.importSpecs imp = False
+  | not $ importTargetMatch entry imp = False
+  | Syntax.importQualified imp = True
+  | otherwise = (==) entryModule
+                     (ASTUtil.getStringModuleName (Syntax.importModule imp))
 
 addEntryToExistingImport :: ImportEntry -> ImportDecl -> Maybe ImportDecl
 addEntryToExistingImport entry@(_, entryObject, _) imp
