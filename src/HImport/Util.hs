@@ -22,8 +22,7 @@ import           Data.Text                      ( splitOn
 type ImportEntry = (String, String, Maybe String)
 
 isIdentQualified :: String -> Bool
-isIdentQualified =
-  liftA2 (&&) (not . null . filter (== '.')) (not . null . filter (/= '.'))
+isIdentQualified = liftA2 (&&) ('.' `elem`) (any (/= '.'))
 
 splitTokens :: String -> [String]
 splitTokens = map unpack . splitOn "." . pack
@@ -35,7 +34,7 @@ removeMarker :: String -> String
 removeMarker str = if hasMarker str then init str else str
 
 importedName :: String -> String
-importedName ident = if (null $ filter (== '\'') ident)
+importedName ident = if '\'' `notElem` ident
   then ident
   else
     let tokens = splitTokens ident
@@ -43,7 +42,7 @@ importedName ident = if (null $ filter (== '\'') ident)
                                                        tokens
 
 moduleName :: String -> Maybe String
-moduleName ident = if (null moduleTokens)
+moduleName ident = if null moduleTokens
   then Nothing
   else Just $ intercalate "." moduleTokens
  where

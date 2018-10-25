@@ -1,2 +1,2 @@
 run_tests:
-	cabal test
+	stack test

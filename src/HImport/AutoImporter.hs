@@ -37,8 +37,10 @@ import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
 import           Data.Maybe                     ( isJust
                                                 , fromJust
+                                                , fromMaybe
                                                 , isNothing
                                                 , catMaybes
+                                                , mapMaybe
                                                 )
 
 import           Control.Monad.State            ( State
@@ -56,13 +58,13 @@ type QName = Syntax.QName SrcLoc.SrcSpanInfo
 collectAndRewriteIdents :: Data a => a -> (a, [String])
 collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
  where
-  visit :: QName -> State [String] (QName)
+  visit :: QName -> State [String] QName
   visit node = do
     state <- get
     let fullName = ASTUtil.getStringQName node
     put (fullName : state)
     return $ if isIdentQualified fullName
-      then ASTUtil.buildQName $ importedName $ fullName
+      then ASTUtil.buildQName $ importedName fullName
       else node
 
 --------------------------------------------------------------------------------
@@ -71,9 +73,9 @@ collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
 
 addEntryToNewImport :: ImportEntry -> [ImportDecl] -> [ImportDecl]
 addEntryToNewImport (moduleName, objectName, maybeAs) imports =
-  (newImport : imports)
+  newImport : imports
  where
-  importSpecList = (ASTUtil.buildImportSpecList [ASTUtil.buildIVar objectName])
+  importSpecList = ASTUtil.buildImportSpecList [ASTUtil.buildIVar objectName]
   newImport      = case maybeAs of
     Nothing -> ASTUtil.buildUnqualifiedImportDecl moduleName importSpecList
     Just as -> ASTUtil.buildQualifiedImportDecl moduleName as importSpecList
@@ -81,28 +83,26 @@ addEntryToNewImport (moduleName, objectName, maybeAs) imports =
 importTargetMatch :: ImportEntry -> ImportDecl -> Bool
 importTargetMatch (_, _, Nothing) (Syntax.ImportDecl _ _ False _ _ _ Nothing _)
   = True
-importTargetMatch (_, _, (Just as)) (Syntax.ImportDecl _ _ True _ _ _ (Just importAs) _)
-  = (as == (ASTUtil.getStringModuleName importAs))
+importTargetMatch (_, _, Just as) (Syntax.ImportDecl _ _ True _ _ _ (Just importAs) _)
+  = as == ASTUtil.getStringModuleName importAs
 importTargetMatch _ _ = False
 
 isCollapsibleInto :: ImportEntry -> ImportDecl -> Bool
 isCollapsibleInto entry imp | isNothing $ Syntax.importSpecs imp = False
                             | otherwise = importTargetMatch entry imp
 
-addEntryToExistingImport :: ImportEntry -> (ImportDecl) -> (Maybe (ImportDecl))
+addEntryToExistingImport :: ImportEntry -> ImportDecl -> Maybe ImportDecl
 addEntryToExistingImport entry@(_, entryObject, _) imp
-  | entry `isCollapsibleInto` imp
-  = Just
-    $ (imp
-        { Syntax.importSpecs = Just $ ASTUtil.specListWithNewSpec
-                                 entryObject
-                                 (fromJust $ Syntax.importSpecs imp)
-        }
-      )
-  | otherwise
-  = Nothing
+  | entry `isCollapsibleInto` imp = Just
+    (imp
+      { Syntax.importSpecs = Just $ ASTUtil.specListWithNewSpec
+                               entryObject
+                               (fromJust $ Syntax.importSpecs imp)
+      }
+    )
+  | otherwise = Nothing
 
-addEntryToExistingImports :: [ImportDecl] -> ImportEntry -> (Maybe [ImportDecl])
+addEntryToExistingImports :: [ImportDecl] -> ImportEntry -> Maybe [ImportDecl]
 addEntryToExistingImports imports entry = case foldResult of
   Left  imports -> Nothing
   Right imports -> Just imports
@@ -124,35 +124,30 @@ isSatisfiedBy entry imp
   | not $ importTargetMatch entry imp
   = False
   | otherwise
-  = let
-      (_, objectName, _) = entry
-      (Syntax.ImportSpecList _ _ importedSpecs) =
-        fromJust $ Syntax.importSpecs imp
-      importedObjects = catMaybes $ map ASTUtil.getStringSpecName importedSpecs
-    in
-      (objectName `elem` importedObjects)
+  = let (_, objectName, _) = entry
+        (Syntax.ImportSpecList _ _ importedSpecs) =
+          fromJust $ Syntax.importSpecs imp
+        importedObjects = mapMaybe ASTUtil.getStringSpecName importedSpecs
+    in  (objectName `elem` importedObjects)
 
 addEntry :: [ImportDecl] -> ImportEntry -> [ImportDecl]
 addEntry imports entry
   | any (entry `isSatisfiedBy`) imports = imports
-  | otherwise = case addEntryToExistingImports imports entry of
-    Nothing         -> addEntryToNewImport entry imports
-    Just newImports -> newImports
+  | otherwise = fromMaybe (addEntryToNewImport entry imports)
+                          (addEntryToExistingImports imports entry)
 
 autoImport :: String -> String
-autoImport code
-  = let
-      parseMode = Parser.defaultParseMode
+autoImport code =
+  let parseMode = Parser.defaultParseMode
       result    = Parser.parseModuleWithMode parseMode code
-    in
-      case result of
+  in  case result of
         Parser.ParseOk tree@(Syntax.Module _ _ _ imports _) ->
           let
             (fixedTree, idents) = collectAndRewriteIdents tree
             (Syntax.Module anno maybeHead progma _ decls) = fixedTree
             fixedImports = foldl addEntry imports $ map importEntry idents
             fixedModule =
-              (Syntax.Module anno maybeHead progma fixedImports decls)
+              Syntax.Module anno maybeHead progma fixedImports decls
           in
             Pretty.prettyPrint fixedModule
         Parser.ParseFailed _ _ -> code
