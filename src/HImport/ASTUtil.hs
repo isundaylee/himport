@@ -3,6 +3,7 @@ module HImport.ASTUtil
   , buildQName
   , buildModuleName
   , buildIVar
+  , buildImportSpec
   , buildImportSpecList
   , buildUnqualifiedImportDecl
   , buildQualifiedImportDecl
@@ -11,12 +12,14 @@ module HImport.ASTUtil
   , getStringModuleName
   , getStringQName
   , getStringSpecName
+  , getStringImportObject
   )
 where
 
 import qualified HImport.Util                  as Util
                                                 ( isIdentQualified
                                                 , splitTokens
+                                                , ImportObject(..)
                                                 )
 
 import qualified Language.Haskell.Exts.SrcLoc  as SrcLoc
@@ -26,10 +29,10 @@ import qualified Language.Haskell.Exts.SrcLoc  as SrcLoc
 
 import qualified Language.Haskell.Exts.Syntax  as Syntax
                                                 ( Name(Ident, Symbol)
-                                                , QName(Qual, UnQual)
+                                                , QName(Qual, UnQual, Special)
                                                 , ModuleName(ModuleName)
                                                 , ImportDecl(ImportDecl)
-                                                , ImportSpec(IVar)
+                                                , ImportSpec(IVar, IThingAll)
                                                 , ImportSpecList(ImportSpecList)
                                                 )
 
@@ -45,7 +48,7 @@ type Name = Syntax.Name SrcLoc.SrcSpanInfo
 type QName = Syntax.QName SrcLoc.SrcSpanInfo
 
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
-dummySrcSpanInfo = (SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) [])
+dummySrcSpanInfo = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
 
 buildName :: String -> Name
 buildName = Syntax.Ident dummySrcSpanInfo
@@ -53,21 +56,27 @@ buildName = Syntax.Ident dummySrcSpanInfo
 buildModuleName :: String -> ModuleName
 buildModuleName = Syntax.ModuleName dummySrcSpanInfo
 
+buildImportSpec :: Util.ImportObject -> ImportSpec
+buildImportSpec (Util.ImportVar  var) = buildIVar var
+buildImportSpec (Util.ImportType var) = buildIThingAll var
+
 buildIVar :: String -> ImportSpec
 buildIVar = Syntax.IVar dummySrcSpanInfo . buildName
+
+buildIThingAll :: String -> ImportSpec
+buildIThingAll = Syntax.IThingAll dummySrcSpanInfo . buildName
 
 buildQName :: String -> QName
 buildQName name
   | not $ Util.isIdentQualified name
-  = (Syntax.UnQual dummySrcSpanInfo $ buildName name)
+  = Syntax.UnQual dummySrcSpanInfo $ buildName name
   | otherwise
   = let tokens     = Util.splitTokens name
         base       = last tokens
         moduleName = intercalate "." $ init tokens
-    in  (Syntax.Qual dummySrcSpanInfo
-                     (buildModuleName moduleName)
-                     (buildName base)
-        )
+    in  Syntax.Qual dummySrcSpanInfo
+                    (buildModuleName moduleName)
+                    (buildName base)
 
 buildUnqualifiedImportDecl :: String -> ImportSpecList -> ImportDecl
 buildUnqualifiedImportDecl moduleName specList = Syntax.ImportDecl
@@ -92,8 +101,7 @@ buildQualifiedImportDecl moduleName asName specList = Syntax.ImportDecl
   (Just specList)
 
 buildImportSpecList :: [ImportSpec] -> ImportSpecList
-buildImportSpecList objects =
-  Syntax.ImportSpecList dummySrcSpanInfo False objects
+buildImportSpecList = Syntax.ImportSpecList dummySrcSpanInfo False
 
 getStringName :: Syntax.Name l -> String
 getStringName (Syntax.Ident  _ name) = name
@@ -104,17 +112,20 @@ getStringModuleName (Syntax.ModuleName _ name) = name
 
 getStringQName :: QName -> String
 getStringQName (Syntax.Qual _ (Syntax.ModuleName _ moduleName) name) =
-  moduleName ++ "." ++ (getStringName name)
-getStringQName (Syntax.UnQual _ name) = getStringName name
-getStringQName node                   = "UNKNOWN"
+  moduleName ++ "." ++ getStringName name
+getStringQName (Syntax.UnQual  _ name) = getStringName name
+getStringQName (Syntax.Special _ con ) = "SPECIAL"
 
 getStringSpecName :: ImportSpec -> Maybe String
 getStringSpecName (Syntax.IVar _ name) = Just $ getStringName name
-getStringSpecName _                    = Nothing
+getStringSpecName (Syntax.IThingAll _ name) =
+  Just $ getStringName name ++ "(..)"
+getStringSpecName _ = Nothing
 
-specListWithNewSpec :: String -> ImportSpecList -> ImportSpecList
-specListWithNewSpec object specList
-  | Syntax.ImportSpecList annotation hiding specs <- specList
-  = if object `elem` (catMaybes $ map getStringSpecName specs)
-    then specList
-    else Syntax.ImportSpecList annotation hiding (specs ++ [buildIVar object])
+getStringImportObject :: Util.ImportObject -> String
+getStringImportObject (Util.ImportVar  var) = var
+getStringImportObject (Util.ImportType var) = var ++ "(..)"
+
+specListWithNewSpec :: Util.ImportObject -> ImportSpecList -> ImportSpecList
+specListWithNewSpec object (Syntax.ImportSpecList annotation hiding specs) =
+  Syntax.ImportSpecList annotation hiding (specs ++ [buildImportSpec object])

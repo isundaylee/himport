@@ -1,9 +1,11 @@
 module HImport.Util
   ( isIdentQualified
   , importedName
-  , importEntry
+  , importVarEntry
+  , importTypeEntry
   , splitTokens
   , ImportEntry
+  , ImportObject(..)
   )
 where
 
@@ -19,7 +21,9 @@ import           Data.Text                      ( splitOn
                                                 , unpack
                                                 )
 
-type ImportEntry = (String, String, Maybe String)
+data ImportObject = ImportVar String | ImportType String deriving (Show, Eq);
+
+type ImportEntry = (String, ImportObject, Maybe String)
 
 isIdentQualified :: String -> Bool
 isIdentQualified = liftA2 (&&) ('.' `elem`) (any (/= '.'))
@@ -52,9 +56,16 @@ moduleName ident = if null moduleTokens
 objectName :: String -> String
 objectName = removeMarker . last . splitTokens
 
-importEntry :: String -> ImportEntry
-importEntry ident =
-  let modu   = fromJust $ moduleName ident
-      object = objectName ident
-      name   = importedName ident
-  in  (modu, object, moduleName name)
+importVarEntry :: String -> ImportEntry
+importVarEntry ident =
+  ( fromJust $ moduleName ident
+  , ImportVar $ objectName ident
+  , moduleName $ importedName ident
+  )
+
+importTypeEntry :: String -> ImportEntry
+importTypeEntry ident =
+  ( fromJust $ moduleName ident
+  , ImportType $ objectName ident
+  , moduleName $ importedName ident
+  )

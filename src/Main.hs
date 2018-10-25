@@ -1,7 +1,6 @@
 import           System.Environment             ( getArgs )
 
-import           HImport.AutoImporter
-                                                ( autoImport )
+import           HImport.AutoImporter           ( autoImport )
 
 main :: IO ()
-main = interact $ autoImport
+main = interact autoImport

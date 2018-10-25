@@ -28,12 +28,18 @@ spec = do
     it "should work in cases without '" $ do
       (importedName "Data.List.map") `shouldBe` "Data.List.map"
 
-  describe "importEntry" $ do
+  describe "importVarEntry" $ do
     it "should work with qualified import" $ do
-      (importEntry "Data.List'.map")
-        `shouldBe` ("Data.List", "map", Just "List")
-      (importEntry "Data.List.map")
-        `shouldBe` ("Data.List", "map", Just "Data.List")
+      (importVarEntry "Data.List'.map")
+        `shouldBe` ("Data.List", ImportVar "map", Just "List")
+      (importVarEntry "Data.List.map")
+        `shouldBe` ("Data.List", ImportVar "map", Just "Data.List")
 
     it "should work with unqualified import" $ do
-      (importEntry "Data.List.map'") `shouldBe` ("Data.List", "map", Nothing)
+      (importVarEntry "Data.List.map'")
+        `shouldBe` ("Data.List", ImportVar "map", Nothing)
+
+  describe "importTypeEntry" $ do
+    it "should work" $ do
+      (importTypeEntry "Data.List.map'")
+        `shouldBe` ("Data.List", ImportType "map", Nothing)

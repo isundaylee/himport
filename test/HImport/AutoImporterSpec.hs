@@ -180,3 +180,54 @@ spec = do
                      , "main = List.somethingElse"
                      ]
                    )
+
+    it "should import all constructors for a data type" $ do
+      (autoImport
+          (joinLines
+            [ "main :: Data.List.List' -> String"
+            , "main list = Data.List.toString' list"
+            ]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import Data.List (toString, List(..))"
+                     , ""
+                     , "main :: List -> String"
+                     , "main list = toString list"
+                     ]
+                   )
+
+    it "should not import duplicate type" $ do
+      (autoImport
+          (joinLines
+            [ "import Data.List (toString, List(..))"
+            , "main :: Data.List.List' -> String"
+            , "main list = Data.List.toString' list"
+            ]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import Data.List (toString, List(..))"
+                     , ""
+                     , "main :: List -> String"
+                     , "main list = toString list"
+                     ]
+                   )
+
+    it "should not import constructors separately" $ do
+      (autoImport
+          (joinLines
+            [ "import Data.List (List(..))"
+            , ""
+            , "main :: Data.List.List'"
+            , "main = Data.List.Empty'"
+            ]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import Data.List (List(..))"
+                     , ""
+                     , "main :: List"
+                     , "main = Empty"
+                     ]
+                   )
