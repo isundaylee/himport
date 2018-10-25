@@ -62,7 +62,7 @@ collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
   visit node = do
     state <- get
     let fullName = ASTUtil.getStringQName node
-    put (fullName : state)
+    put $ if isIdentQualified fullName then fullName : state else state
     return $ if isIdentQualified fullName
       then ASTUtil.buildQName $ importedName fullName
       else node
