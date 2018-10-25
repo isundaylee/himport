@@ -166,3 +166,17 @@ spec = do
                      , "main = List.something"
                      ]
                    )
+
+    -- it "should insert into already imported partial imports" $ do
+    --   (autoImport
+    --       (joinLines
+    --         [ "import qualified Data.List as List (something)"
+    --         , "main = List.somethingElse"
+    --         ]
+    --       )
+    --     )
+    --     `shouldBe` (joinLines
+    --                  [ "import qualified Data.List as List (something, somethingElse)"
+    --                  , "main = List.somethingElse"
+    --                  ]
+    --                )

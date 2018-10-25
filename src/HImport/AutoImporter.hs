@@ -69,27 +69,22 @@ collectAndRewriteIdents tree = runState (everywhereM (mkM visit) tree) []
 -- Add-to-import logic
 --------------------------------------------------------------------------------
 
-addNewImport :: ImportEntry -> [ImportDecl] -> [ImportDecl]
-addNewImport (moduleName, objectName, maybeAs) imports = (newImport : imports)
+addEntryToNewImport :: ImportEntry -> [ImportDecl] -> [ImportDecl]
+addEntryToNewImport (moduleName, objectName, maybeAs) imports =
+  (newImport : imports)
  where
   importSpecList = (ASTUtil.buildImportSpecList [ASTUtil.buildIVar objectName])
   newImport      = case maybeAs of
     Nothing -> ASTUtil.buildUnqualifiedImportDecl moduleName importSpecList
     Just as -> ASTUtil.buildQualifiedImportDecl moduleName as importSpecList
 
-qualMatch :: (Maybe String) -> Bool -> (Maybe (ModuleName)) -> Bool
-qualMatch Nothing False Nothing = True
-qualMatch (Just entryAsName) True (Just (Syntax.ModuleName _ importAsName)) =
-  (entryAsName == importAsName)
-qualMatch _ _ _ = False
-
-addToExistingImport :: ImportEntry -> (ImportDecl) -> (Maybe (ImportDecl))
-addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.ImportDecl _ (Syntax.ModuleName _ impModule) impIsQual _ _ _ impAs impMaybeSpecs)
+addEntryToExistingImport :: ImportEntry -> (ImportDecl) -> (Maybe (ImportDecl))
+addEntryToExistingImport entry@(entryModule, entryObject, entryMaybeAsName) imp@(Syntax.ImportDecl _ (Syntax.ModuleName _ impModule) impIsQual _ _ _ impAs impMaybeSpecs)
   | (isNothing impMaybeSpecs)
   = Nothing
   | impModule /= entryModule
   = Nothing
-  | not $ qualMatch entryMaybeAsName impIsQual impAs
+  | not $ qualMatch entry imp
   = Nothing
   | otherwise
   = Just
@@ -100,55 +95,48 @@ addToExistingImport (entryModule, entryObject, entryMaybeAsName) imp@(Syntax.Imp
       }
     )
 
-addToExistingImports :: ImportEntry -> [ImportDecl] -> (Maybe [ImportDecl])
-addToExistingImports ident [] = Nothing
-addToExistingImports ident (firstImport : rest) =
-  case (addToExistingImport ident firstImport) of
-    Just newImport -> Just (newImport : rest)
-    Nothing        -> case addToExistingImports ident rest of
-      Nothing          -> Nothing
-      Just restImports -> Just (firstImport : restImports)
-
-matchInExistingImports :: ImportEntry -> [ImportDecl] -> Bool
-matchInExistingImports ident [] = False
-matchInExistingImports ident (firstImport : restImports) =
-  if match ident firstImport
-    then True
-    else matchInExistingImports ident restImports
+addEntryToExistingImports :: [ImportDecl] -> ImportEntry -> (Maybe [ImportDecl])
+addEntryToExistingImports imports entry = case foldResult of
+  Left  imports -> Nothing
+  Right imports -> Just imports
  where
-  match :: ImportEntry -> ImportDecl -> Bool
-  match (entryModule, entryObject, entryMaybeAs) (Syntax.ImportDecl _ _ importIsQual _ _ _ importMaybeAs importMaybeSpecList)
-    | isNothing importMaybeSpecList
-    = False
-    | (isJust entryMaybeAs) && (isNothing importMaybeAs)
-    = False
-    | (isNothing entryMaybeAs) && (isJust importMaybeAs)
-    = False
-    | (isJust entryMaybeAs)
-      && (  (fromJust entryMaybeAs)
-         /= (ASTUtil.getStringModuleName $ fromJust importMaybeAs)
-         )
-    = False
-    | otherwise
-    = entryObject `elem` (catMaybes $ map ASTUtil.getStringSpecName importSpecs)
-   where
-    (Syntax.ImportSpecList _ _ importSpecs) = fromJust importMaybeSpecList
+  foldResult = foldr
+    (\imp result -> case result of
+      Left imports -> case addEntryToExistingImport entry imp of
+        Nothing          -> Left (imp : imports)
+        Just modifiedImp -> Right (modifiedImp : imports)
+      Right imports -> result
+    )
+    (Left [])
+    imports
 
-addImport :: String -> [ImportDecl] -> [ImportDecl]
-addImport ident imports =
-  let entry   = importEntry ident
-      matched = matchInExistingImports entry imports
-  in  if matched
-        then imports
-        else case addToExistingImports entry imports of
-          Nothing         -> addNewImport entry imports
-          Just newImports -> newImports
+qualMatch :: ImportEntry -> ImportDecl -> Bool
+qualMatch (_, _, Nothing) (Syntax.ImportDecl _ _ False _ _ _ Nothing _) = True
+qualMatch (_, _, (Just as)) (Syntax.ImportDecl _ _ True _ _ _ (Just importAs) _)
+  = (as == (ASTUtil.getStringModuleName importAs))
+qualMatch _ _ = False
 
-addImports :: [String] -> [ImportDecl] -> [ImportDecl]
-addImports []             imports = imports
-addImports (ident : rest) imports = if isIdentQualified ident
-  then addImport ident $ addImports rest imports
-  else addImports rest imports
+isSatisfiedBy :: ImportEntry -> ImportDecl -> Bool
+isSatisfiedBy entry imp
+  | isNothing $ Syntax.importSpecs imp
+  = False
+  | not $ qualMatch entry imp
+  = False
+  | otherwise
+  = let
+      (_, objectName, _) = entry
+      (Syntax.ImportSpecList _ _ importedSpecs) =
+        fromJust $ Syntax.importSpecs imp
+      importedObjects = catMaybes $ map ASTUtil.getStringSpecName importedSpecs
+    in
+      (objectName `elem` importedObjects)
+
+addEntry :: [ImportDecl] -> ImportEntry -> [ImportDecl]
+addEntry imports entry
+  | any (entry `isSatisfiedBy`) imports = imports
+  | otherwise = case addEntryToExistingImports imports entry of
+    Nothing         -> addEntryToNewImport entry imports
+    Just newImports -> newImports
 
 autoImport :: String -> String
 autoImport code
@@ -161,7 +149,7 @@ autoImport code
           let
             (fixedTree, idents) = collectAndRewriteIdents tree
             (Syntax.Module anno maybeHead progma _ decls) = fixedTree
-            fixedImports        = addImports idents imports
+            fixedImports = foldl addEntry imports $ map importEntry idents
             fixedModule =
               (Syntax.Module anno maybeHead progma fixedImports decls)
           in
