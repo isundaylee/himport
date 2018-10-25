@@ -119,7 +119,7 @@ addEntryToExistingImports imports entry = case foldResult of
       Left imports -> case addEntryToExistingImport entry imp of
         Nothing          -> Left (imp : imports)
         Just modifiedImp -> Right (modifiedImp : imports)
-      Right imports -> result
+      Right imports -> Right (imp : imports)
     )
     (Left [])
     imports

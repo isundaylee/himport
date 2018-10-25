@@ -256,3 +256,19 @@ spec = do
                      , "main = somethingElse"
                      ]
                    )
+
+    it "should not drop imports following collapsing match" $ do
+      (autoImport
+          (joinLines
+            [ "import qualified Data.List as List (something)"
+            , "import qualified Data.List2 as List2 (something)"
+            , "main = Data.List2'.somethingElse"
+            ]
+          )
+        )
+        `shouldBe` (joinLines
+                     [ "import qualified Data.List as List (something)"
+                     , "import qualified Data.List2 as List2 (something, somethingElse)"
+                     , "main = List2.somethingElse"
+                     ]
+                   )
