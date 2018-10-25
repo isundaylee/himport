@@ -78,22 +78,29 @@ addEntryToNewImport (moduleName, objectName, maybeAs) imports =
     Nothing -> ASTUtil.buildUnqualifiedImportDecl moduleName importSpecList
     Just as -> ASTUtil.buildQualifiedImportDecl moduleName as importSpecList
 
+importTargetMatch :: ImportEntry -> ImportDecl -> Bool
+importTargetMatch (_, _, Nothing) (Syntax.ImportDecl _ _ False _ _ _ Nothing _)
+  = True
+importTargetMatch (_, _, (Just as)) (Syntax.ImportDecl _ _ True _ _ _ (Just importAs) _)
+  = (as == (ASTUtil.getStringModuleName importAs))
+importTargetMatch _ _ = False
+
+isCollapsibleInto :: ImportEntry -> ImportDecl -> Bool
+isCollapsibleInto entry imp | isNothing $ Syntax.importSpecs imp = False
+                            | otherwise = importTargetMatch entry imp
+
 addEntryToExistingImport :: ImportEntry -> (ImportDecl) -> (Maybe (ImportDecl))
-addEntryToExistingImport entry@(entryModule, entryObject, entryMaybeAsName) imp@(Syntax.ImportDecl _ (Syntax.ModuleName _ impModule) impIsQual _ _ _ impAs impMaybeSpecs)
-  | (isNothing impMaybeSpecs)
-  = Nothing
-  | impModule /= entryModule
-  = Nothing
-  | not $ qualMatch entry imp
-  = Nothing
-  | otherwise
+addEntryToExistingImport entry@(_, entryObject, _) imp
+  | entry `isCollapsibleInto` imp
   = Just
-    (imp
-      { Syntax.importSpecs = Just $ ASTUtil.specListWithNewSpec
-                               entryObject
-                               (fromJust impMaybeSpecs)
-      }
-    )
+    $ (imp
+        { Syntax.importSpecs = Just $ ASTUtil.specListWithNewSpec
+                                 entryObject
+                                 (fromJust $ Syntax.importSpecs imp)
+        }
+      )
+  | otherwise
+  = Nothing
 
 addEntryToExistingImports :: [ImportDecl] -> ImportEntry -> (Maybe [ImportDecl])
 addEntryToExistingImports imports entry = case foldResult of
@@ -110,17 +117,11 @@ addEntryToExistingImports imports entry = case foldResult of
     (Left [])
     imports
 
-qualMatch :: ImportEntry -> ImportDecl -> Bool
-qualMatch (_, _, Nothing) (Syntax.ImportDecl _ _ False _ _ _ Nothing _) = True
-qualMatch (_, _, (Just as)) (Syntax.ImportDecl _ _ True _ _ _ (Just importAs) _)
-  = (as == (ASTUtil.getStringModuleName importAs))
-qualMatch _ _ = False
-
 isSatisfiedBy :: ImportEntry -> ImportDecl -> Bool
 isSatisfiedBy entry imp
   | isNothing $ Syntax.importSpecs imp
   = False
-  | not $ qualMatch entry imp
+  | not $ importTargetMatch entry imp
   = False
   | otherwise
   = let
