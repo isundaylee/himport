@@ -1,2 +1,2 @@
 run_tests:
-	stack test
+	stack test --ghc-options="-optc -Wno-expansion-to-defined"
