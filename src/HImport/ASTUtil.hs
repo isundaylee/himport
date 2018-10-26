@@ -16,40 +16,43 @@ module HImport.ASTUtil
   , Rewrite(..)
   )
 where
-
 import qualified HImport.Util                  as Util
                                                 ( isIdentQualified
                                                 , splitTokens
                                                 , ImportObject(..)
                                                 )
-
 import qualified Language.Haskell.Exts.SrcLoc  as SrcLoc
                                                 ( SrcSpanInfo(SrcSpanInfo)
                                                 , SrcSpan(SrcSpan)
                                                 , SrcLoc(..)
+                                                , SrcSpanInfo(..)
+                                                , SrcSpan(..)
                                                 )
-
 import qualified Language.Haskell.Exts.Syntax  as Syntax
-                                                ( Name(Ident, Symbol)
-                                                , QName(Qual, UnQual, Special)
-                                                , ModuleName(ModuleName)
-                                                , ImportDecl(ImportDecl)
-                                                , ImportSpec(IVar, IThingAll)
-                                                , ImportSpecList(ImportSpecList)
+                                                ( ImportDecl(..)
+                                                , ImportSpec(..)
+                                                , ImportSpecList(..)
+                                                , ModuleName(..)
+                                                , Name(..)
+                                                , QName(..)
                                                 )
-
 import           Data.Maybe                     ( catMaybes )
-
 import           Data.List                      ( intercalate )
 
 type ImportDecl = Syntax.ImportDecl SrcLoc.SrcSpanInfo
+
 type ImportSpec = Syntax.ImportSpec SrcLoc.SrcSpanInfo
+
 type ImportSpecList = Syntax.ImportSpecList SrcLoc.SrcSpanInfo
+
 type ModuleName = Syntax.ModuleName SrcLoc.SrcSpanInfo
+
 type Name = Syntax.Name SrcLoc.SrcSpanInfo
+
 type QName = Syntax.QName SrcLoc.SrcSpanInfo
 
-data Rewrite = Rewrite SrcLoc.SrcSpan Int deriving (Show, Eq);
+data Rewrite = Rewrite SrcLoc.SrcSpan Int
+             deriving (Show, Eq)
 
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
 dummySrcSpanInfo = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
