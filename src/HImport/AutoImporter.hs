@@ -13,7 +13,6 @@ import           HImport.Util                   ( isIdentQualified
 
 import qualified HImport.ASTUtil               as ASTUtil
                                                 ( buildQName
-                                                , buildModuleName
                                                 , buildImportSpec
                                                 , buildIVar
                                                 , buildImportSpecList
@@ -33,6 +32,8 @@ import qualified Language.Haskell.Exts.Syntax  as Syntax
 import qualified Language.Haskell.Exts.SrcLoc  as SrcLoc
 import qualified Language.Haskell.Exts.Pretty  as Pretty
 import qualified Language.Haskell.Exts.Build   as Build
+import qualified Language.Haskell.Exts.ExactPrint
+                                               as ExactPrint
 
 import           Data.Generics.Schemes          ( everywhere
                                                 , everywhereM
@@ -192,25 +193,38 @@ collectIdents tree = IdentList (filter isIdentQualified allVarIdents)
   collect qName flags@(Skip : _) = (emptyIdentList, flags)
   collect _     flags            = (emptyIdentList, flags)
 
-rewriteIdents :: Data a => a -> a
-rewriteIdents = everywhere (mkT rewrite)
+data Rewrite = Rewrite SrcLoc.SrcSpan Int deriving (Show, Eq);
+
+rewriteIdents :: Data a => a -> (a, [Rewrite])
+rewriteIdents tree = runState (everywhereM (mkM rewrite) tree) []
  where
-  rewrite :: QName -> QName
-  rewrite node =
-    let name = ASTUtil.getStringQName node
-    in  if isIdentQualified name
-          then ASTUtil.buildQName $ importedName name
-          else node
+  rewrite :: QName -> State [Rewrite] QName
+  rewrite node = do
+    let oldName = ASTUtil.getStringQName node
+    if isIdentQualified oldName
+      then do
+        let newName = importedName oldName
+        let span    = SrcLoc.srcInfoSpan $ Syntax.ann node
+        let newNode = ASTUtil.buildQName newName $ SrcLoc.SrcLoc
+              (SrcLoc.srcSpanFilename span)
+              (SrcLoc.srcSpanStartLine span)
+              (SrcLoc.srcSpanStartColumn span)
+        let newRewrite = Rewrite (SrcLoc.srcInfoSpan $ Syntax.ann node)
+                                 (length newName - length oldName)
+        rewrites <- get
+        put $ newRewrite : rewrites
+        return newNode
+      else return node
 
 autoImport :: String -> String
 autoImport code =
   let parseMode = Parser.defaultParseMode
-      result    = Parser.parseModuleWithMode parseMode code
+      result    = Parser.parseModuleWithComments parseMode code
   in  case result of
-        Parser.ParseOk tree ->
+        Parser.ParseOk (tree, comments) ->
           let
             (IdentList varIdents typeIdents) = collectIdents tree
-            fixedTree                        = rewriteIdents tree
+            (fixedTree, rewrites)            = rewriteIdents tree
             (Syntax.Module anno maybeHead progma imports decls) = fixedTree
             fixedImports                     = foldl addEntry imports
               $ (++)

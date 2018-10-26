@@ -25,6 +25,7 @@ import qualified HImport.Util                  as Util
 import qualified Language.Haskell.Exts.SrcLoc  as SrcLoc
                                                 ( SrcSpanInfo(SrcSpanInfo)
                                                 , SrcSpan(SrcSpan)
+                                                , SrcLoc(..)
                                                 )
 
 import qualified Language.Haskell.Exts.Syntax  as Syntax
@@ -50,38 +51,56 @@ type QName = Syntax.QName SrcLoc.SrcSpanInfo
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
 dummySrcSpanInfo = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
 
-buildName :: String -> Name
-buildName = Syntax.Ident dummySrcSpanInfo
+dummySrcLoc :: SrcLoc.SrcLoc
+dummySrcLoc = SrcLoc.SrcLoc "" 0 0
 
-buildModuleName :: String -> ModuleName
-buildModuleName = Syntax.ModuleName dummySrcSpanInfo
+advanceSrcLoc :: Int -> SrcLoc.SrcLoc -> SrcLoc.SrcLoc
+advanceSrcLoc offset (SrcLoc.SrcLoc filename line col) =
+  SrcLoc.SrcLoc filename line (col + offset)
+
+buildSrcSpanInfo :: SrcLoc.SrcLoc -> Int -> SrcLoc.SrcSpanInfo
+buildSrcSpanInfo (SrcLoc.SrcLoc filename startLine startCol) len =
+  SrcLoc.SrcSpanInfo
+    (SrcLoc.SrcSpan filename startLine startCol startLine (startCol + len))
+    []
+
+buildName :: String -> SrcLoc.SrcLoc -> Name
+buildName name loc = Syntax.Ident (buildSrcSpanInfo loc $ length name) name
+
+buildModuleName :: String -> SrcLoc.SrcLoc -> ModuleName
+buildModuleName name loc =
+  Syntax.ModuleName (buildSrcSpanInfo loc $ length name) name
 
 buildImportSpec :: Util.ImportObject -> ImportSpec
 buildImportSpec (Util.ImportVar  var) = buildIVar var
 buildImportSpec (Util.ImportType var) = buildIThingAll var
 
 buildIVar :: String -> ImportSpec
-buildIVar = Syntax.IVar dummySrcSpanInfo . buildName
+buildIVar name = Syntax.IVar dummySrcSpanInfo $ buildName name dummySrcLoc
 
 buildIThingAll :: String -> ImportSpec
-buildIThingAll = Syntax.IThingAll dummySrcSpanInfo . buildName
+buildIThingAll name =
+  Syntax.IThingAll dummySrcSpanInfo $ buildName name dummySrcLoc
 
-buildQName :: String -> QName
-buildQName name
+buildQName :: String -> SrcLoc.SrcLoc -> QName
+buildQName name startLoc
   | not $ Util.isIdentQualified name
-  = Syntax.UnQual dummySrcSpanInfo $ buildName name
+  = let (SrcLoc.SrcLoc filename startLine startCol) = startLoc
+    in  Syntax.UnQual (buildSrcSpanInfo startLoc $ length name)
+          $ buildName name startLoc
   | otherwise
   = let tokens     = Util.splitTokens name
         base       = last tokens
         moduleName = intercalate "." $ init tokens
-    in  Syntax.Qual dummySrcSpanInfo
-                    (buildModuleName moduleName)
-                    (buildName base)
+    in  Syntax.Qual
+          (buildSrcSpanInfo startLoc $ length name)
+          (buildModuleName moduleName startLoc)
+          (buildName base $ advanceSrcLoc (1 + length moduleName) startLoc)
 
 buildUnqualifiedImportDecl :: String -> ImportSpecList -> ImportDecl
 buildUnqualifiedImportDecl moduleName specList = Syntax.ImportDecl
   dummySrcSpanInfo
-  (buildModuleName moduleName)
+  (buildModuleName moduleName dummySrcLoc)
   False
   False
   False
@@ -92,12 +111,12 @@ buildUnqualifiedImportDecl moduleName specList = Syntax.ImportDecl
 buildQualifiedImportDecl :: String -> String -> ImportSpecList -> ImportDecl
 buildQualifiedImportDecl moduleName asName specList = Syntax.ImportDecl
   dummySrcSpanInfo
-  (buildModuleName moduleName)
+  (buildModuleName moduleName dummySrcLoc)
   True
   False
   False
   Nothing
-  (Just $ buildModuleName asName)
+  (Just $ buildModuleName asName dummySrcLoc)
   (Just specList)
 
 buildImportSpecList :: [ImportSpec] -> ImportSpecList
