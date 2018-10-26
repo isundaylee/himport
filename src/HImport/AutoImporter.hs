@@ -23,6 +23,7 @@ import qualified HImport.ASTUtil               as ASTUtil
                                                 , getStringModuleName
                                                 , specListWithNewSpec
                                                 , getStringImportObject
+                                                , Rewrite(..)
                                                 )
 
 import           Debug.Trace                    ( trace )
@@ -193,12 +194,10 @@ collectIdents tree = IdentList (filter isIdentQualified allVarIdents)
   collect qName flags@(Skip : _) = (emptyIdentList, flags)
   collect _     flags            = (emptyIdentList, flags)
 
-data Rewrite = Rewrite SrcLoc.SrcSpan Int deriving (Show, Eq);
-
-rewriteIdents :: Data a => a -> (a, [Rewrite])
+rewriteIdents :: Data a => a -> (a, [ASTUtil.Rewrite])
 rewriteIdents tree = runState (everywhereM (mkM rewrite) tree) []
  where
-  rewrite :: QName -> State [Rewrite] QName
+  rewrite :: QName -> State [ASTUtil.Rewrite] QName
   rewrite node = do
     let oldName = ASTUtil.getStringQName node
     if isIdentQualified oldName
@@ -209,8 +208,9 @@ rewriteIdents tree = runState (everywhereM (mkM rewrite) tree) []
               (SrcLoc.srcSpanFilename span)
               (SrcLoc.srcSpanStartLine span)
               (SrcLoc.srcSpanStartColumn span)
-        let newRewrite = Rewrite (SrcLoc.srcInfoSpan $ Syntax.ann node)
-                                 (length newName - length oldName)
+        let newRewrite = ASTUtil.Rewrite
+              (SrcLoc.srcInfoSpan $ Syntax.ann node)
+              (length newName - length oldName)
         rewrites <- get
         put $ newRewrite : rewrites
         return newNode

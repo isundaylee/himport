@@ -13,6 +13,7 @@ module HImport.ASTUtil
   , getStringQName
   , getStringSpecName
   , getStringImportObject
+  , Rewrite(..)
   )
 where
 
@@ -47,6 +48,8 @@ type ImportSpecList = Syntax.ImportSpecList SrcLoc.SrcSpanInfo
 type ModuleName = Syntax.ModuleName SrcLoc.SrcSpanInfo
 type Name = Syntax.Name SrcLoc.SrcSpanInfo
 type QName = Syntax.QName SrcLoc.SrcSpanInfo
+
+data Rewrite = Rewrite SrcLoc.SrcSpan Int deriving (Show, Eq);
 
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
 dummySrcSpanInfo = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
