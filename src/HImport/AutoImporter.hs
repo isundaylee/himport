@@ -153,7 +153,7 @@ zeroOutSrcSpanInfo = everywhere $ mkT visit
   visit info = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
 
 data CollectFlag = Var | Type | Skip;
-data IdentList = IdentList [String] [String]
+data IdentList = IdentList [String] [String] deriving (Show)
 
 mergeIdentList :: IdentList -> IdentList -> IdentList
 mergeIdentList (IdentList va ta) (IdentList vb tb) =

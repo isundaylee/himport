@@ -276,3 +276,9 @@ spec = do
     it "should not not import constructors in patterns" $ do
       (autoImport (joinLines ["main Util.Empty = 0"]))
         `shouldBe` (joinLines ["main Util.Empty = 0"])
+
+    it "should not import typeclass multiple times" $ do
+      (autoImport
+          (joinLines ["import Data (Data)", "main :: Data.Data' a => a"])
+        )
+        `shouldBe` (joinLines ["import Data (Data)", "", "main :: Data a => a"])

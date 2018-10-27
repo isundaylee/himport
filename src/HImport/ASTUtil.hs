@@ -142,7 +142,8 @@ getStringQName (Syntax.UnQual  _ name) = getStringName name
 getStringQName (Syntax.Special _ con ) = "SPECIAL"
 
 getStringSpecName :: ImportSpec -> Maybe String
-getStringSpecName (Syntax.IVar _ name) = Just $ getStringName name
+getStringSpecName (Syntax.IVar _ name  ) = Just $ getStringName name
+getStringSpecName (Syntax.IAbs _ _ name) = Just $ getStringName name
 getStringSpecName (Syntax.IThingAll _ name) =
   Just $ getStringName name ++ "(..)"
 getStringSpecName _ = Nothing
