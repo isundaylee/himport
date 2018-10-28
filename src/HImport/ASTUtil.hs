@@ -13,9 +13,23 @@ module HImport.ASTUtil
   , getStringQName
   , getStringSpecName
   , getStringImportObject
+  , applyRewrite
+  , applyRewrites
   , Rewrite(..)
   )
 where
+import           Debug.Trace                    ( trace )
+import           Control.Monad.State            ( State(..)
+                                                , runState
+                                                )
+import           Data.Generics.Aliases          ( mkQ
+                                                , mkT
+                                                )
+import           Data.Generics.Schemes          ( everythingWithContext
+                                                , everything
+                                                , everywhere
+                                                )
+import           Data.Data                      ( Data )
 import qualified HImport.Util                  as Util
                                                 ( isIdentQualified
                                                 , splitTokens
@@ -35,9 +49,14 @@ import qualified Language.Haskell.Exts.Syntax  as Syntax
                                                 , ModuleName(..)
                                                 , Name(..)
                                                 , QName(..)
+                                                , Annotated
+                                                , ann
+                                                , Module(..)
                                                 )
 import           Data.Maybe                     ( catMaybes )
-import           Data.List                      ( intercalate )
+import           Data.List                      ( intercalate
+                                                , sort
+                                                )
 
 type ImportDecl = Syntax.ImportDecl SrcLoc.SrcSpanInfo
 
@@ -52,7 +71,7 @@ type Name = Syntax.Name SrcLoc.SrcSpanInfo
 type QName = Syntax.QName SrcLoc.SrcSpanInfo
 
 data Rewrite = Rewrite SrcLoc.SrcSpan Int
-             deriving (Show, Eq)
+             deriving (Show, Eq, Ord)
 
 dummySrcSpanInfo :: SrcLoc.SrcSpanInfo
 dummySrcSpanInfo = SrcLoc.SrcSpanInfo (SrcLoc.SrcSpan "" 0 0 0 0) []
@@ -155,3 +174,61 @@ getStringImportObject (Util.ImportType var) = var ++ "(..)"
 specListWithNewSpec :: Util.ImportObject -> ImportSpecList -> ImportSpecList
 specListWithNewSpec object (Syntax.ImportSpecList annotation hiding specs) =
   Syntax.ImportSpecList annotation hiding (specs ++ [buildImportSpec object])
+
+spanIsContainedIn :: SrcLoc.SrcSpan -> SrcLoc.SrcSpan -> Bool
+spanIsContainedIn spanA spanB =
+  let (SrcLoc.SrcSpan _ startLineA startColA endLineA endColA) = spanA
+      (SrcLoc.SrcSpan _ startLineB startColB endLineB endColB) = spanB
+  in  ((startLineB, startColB) <= (startLineA, startColA))
+        && ((endLineB, endColB) >= (endLineA, endColA))
+
+spanPrecedes :: SrcLoc.SrcSpan -> SrcLoc.SrcSpan -> Bool
+spanPrecedes spanA spanB = (endLineA, endColA) <= (startLineB, startColB)
+ where
+  (SrcLoc.SrcSpan nameA startLineA startColA endLineA endColA) = spanA
+  (SrcLoc.SrcSpan nameB startLineB startColB endLineB endColB) = spanB
+
+applyContainedRewrite :: SrcLoc.SrcSpan -> Rewrite -> SrcLoc.SrcSpan
+applyContainedRewrite span rewrite
+  | rewriteLine == endLine = SrcLoc.SrcSpan name
+                                            startLine
+                                            startCol
+                                            endLine
+                                            (endCol + rewriteDelta)
+  | otherwise = span
+ where
+  (SrcLoc.SrcSpan name startLine startCol endLine endCol) = span
+  (Rewrite rewriteSpan rewriteDelta                     ) = rewrite
+  (SrcLoc.SrcSpan _ rewriteLine _ _ _                   ) = rewriteSpan
+
+applyPrecedingRewrite :: SrcLoc.SrcSpan -> Rewrite -> SrcLoc.SrcSpan
+applyPrecedingRewrite span rewrite = SrcLoc.SrcSpan name
+                                                    startLine
+                                                    newStartCol
+                                                    endLine
+                                                    newEndCol
+ where
+  (SrcLoc.SrcSpan name startLine startCol endLine endCol    ) = span
+  (Rewrite (SrcLoc.SrcSpan _ rewriteLine _ _ _) rewriteDelta) = rewrite
+  newStartCol = startCol + if rewriteLine == startLine then rewriteDelta else 0
+  newEndCol   = endCol + if rewriteLine == endLine then rewriteDelta else 0
+
+applyRewrite
+  :: Syntax.Module SrcLoc.SrcSpanInfo
+  -> Rewrite
+  -> Syntax.Module SrcLoc.SrcSpanInfo
+applyRewrite tree rewrite@(Rewrite rewriteSpan rewriteOffset) = everywhere
+  (mkT transformSpan)
+  tree
+ where
+  transformSpan :: SrcLoc.SrcSpan -> SrcLoc.SrcSpan
+  transformSpan span
+    | rewriteSpan `spanIsContainedIn` span = applyContainedRewrite span rewrite
+    | rewriteSpan `spanPrecedes` span      = applyPrecedingRewrite span rewrite
+    | otherwise                            = span
+
+applyRewrites
+  :: Syntax.Module SrcLoc.SrcSpanInfo
+  -> [Rewrite]
+  -> Syntax.Module SrcLoc.SrcSpanInfo
+applyRewrites tree = foldr (flip applyRewrite) tree . sort

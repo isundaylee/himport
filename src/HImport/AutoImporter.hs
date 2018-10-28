@@ -23,6 +23,7 @@ import qualified HImport.ASTUtil               as ASTUtil
                                                 , getStringModuleName
                                                 , specListWithNewSpec
                                                 , getStringImportObject
+                                                , applyRewrites
                                                 , Rewrite(..)
                                                 )
 
@@ -218,20 +219,24 @@ rewriteIdents tree = runState (everywhereM (mkM rewrite) tree) []
 
 autoImport :: String -> String
 autoImport code =
-  let parseMode = Parser.defaultParseMode
-      result    = Parser.parseModuleWithComments parseMode code
-  in  case result of
-        Parser.ParseOk (tree, comments) ->
-          let
-            (IdentList varIdents typeIdents) = collectIdents tree
-            (fixedTree, rewrites)            = rewriteIdents tree
-            (Syntax.Module anno maybeHead progma imports decls) = fixedTree
-            fixedImports                     = foldl addEntry imports
-              $ (++)
-                  (map importVarEntry varIdents)
-                  (map importTypeEntry typeIdents)
-            fixedModule =
-              Syntax.Module anno maybeHead progma fixedImports decls
-          in
-            Pretty.prettyPrint fixedModule
-        Parser.ParseFailed _ _ -> code
+  let
+    parseMode = Parser.defaultParseMode
+    result    = Parser.parseModuleWithComments parseMode code
+  in
+    case result of
+      Parser.ParseOk (tree, comments) ->
+        let
+          (IdentList varIdents typeIdents) = collectIdents tree
+          (fixedTree, rewrites) = rewriteIdents tree
+          fixedAndRewrittenTree = ASTUtil.applyRewrites fixedTree rewrites
+          (Syntax.Module anno maybeHead progma imports decls) =
+            fixedAndRewrittenTree
+          fixedImports = foldl addEntry imports
+            $ (++)
+                (map importVarEntry varIdents)
+                (map importTypeEntry typeIdents)
+          fixedModule = Syntax.Module anno maybeHead progma fixedImports decls
+        in
+          Pretty.prettyPrint fixedModule
+
+      Parser.ParseFailed _ _ -> code

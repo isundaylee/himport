@@ -52,7 +52,8 @@ test-suite spec
   type:               exitcode-stdio-1.0
   build-depends:      base,
                       himport,
-                      hspec
+                      hspec,
+                      haskell-src-exts
   other-modules:      HImport.AutoImporterSpec
                       HImport.UtilSpec
   default-language:   Haskell2010
