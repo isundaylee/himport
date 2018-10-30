@@ -237,6 +237,7 @@ autoImport code =
                 (map importTypeEntry typeIdents)
           fixedModule = Syntax.Module anno maybeHead progma fixedImports decls
         in
-          Pretty.prettyPrint fixedModule
+          prettyShow tree
+          -- Pretty.prettyPrint fixedModule
 
       Parser.ParseFailed _ _ -> code
